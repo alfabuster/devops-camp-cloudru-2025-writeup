@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: cloud-deploy
+  name: cloud-deploy
+  namespace: cloud
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cloud-deploy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: cloud-deploy
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - image: alfabuster/echo-server:1.0
+        name: echo-server
+        ports:
+        - containerPort: 8000
+        env:
+          - name: AUTHOR
+            valueFrom:
+              configMapKeyRef:
+                name: cloud-configmap
+                key: AUTHOR
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          periodSeconds: 5
+        

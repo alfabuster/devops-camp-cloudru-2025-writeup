@@ -1,0 +1,113 @@
+---
+- name: Deploy echo-server behind an nginx load balancer
+  hosts: web
+  become: true          # выполнять с sudo — иначе apt на вас посмотрит с презрением
+
+  vars:
+    docker_image: "alfabuster/echo-server:1.0"
+    author_name: "alfabuster"
+    container_count: 3
+    base_port: 8000                  # контейнеры сядут на 8001, 8002, 8003
+    registry_user: "alfabuster"
+    registry_password: "{{ vault_registry_token }}"   # прячем в vault, см. ниже
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name: [ca-certificates, curl, gnupg, python3-pip]
+        state: present
+        update_cache: true
+
+    - name: Create apt keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker's GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker apt repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        filename: docker
+        state: present
+
+    - name: Install docker-ce
+      apt:
+        name: [docker-ce, docker-ce-cli, containerd.io]
+        state: present
+        update_cache: true
+
+    - name: Install Docker SDK for Python
+      pip:
+        name: docker
+        state: present
+
+    - name: Ensure docker is running and enabled
+      service:
+        name: docker
+        state: started
+        enabled: true
+    - name: Log in to the private registry
+      community.docker.docker_login:
+        username: "{{ registry_user }}"
+        password: "{{ registry_password }}"
+
+    - name: Pull the application image
+      community.docker.docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+
+    - name: Run echo-server containers
+      community.docker.docker_container:
+        name: "echo-{{ item }}"
+        image: "{{ docker_image }}"
+        state: started
+        restart_policy: unless-stopped
+        published_ports:
+          - "127.0.0.1:{{ item }}:8000"
+        env:
+          AUTHOR: "{{ author_name }}"
+      loop:
+      - 8001
+      - 8002
+      - 8003
+
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Deploy the load-balancer config
+      template:
+        src: nginx-lb.conf.j2
+        dest: /etc/nginx/sites-available/echo-lb.conf
+      notify: Reload nginx
+
+    - name: Enable the site
+      file:
+        src: /etc/nginx/sites-available/echo-lb.conf
+        dest: /etc/nginx/sites-enabled/echo-lb.conf
+        state: link
+      notify: Reload nginx
+
+    - name: Remove the default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: Ensure nginx is running and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded

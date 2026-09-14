@@ -1,0 +1,9 @@
+FROM python:3.12-alpine
+WORKDIR /app
+RUN adduser -D appuser 
+COPY --chown=appuser:appuser server.py .
+COPY server.py .
+EXPOSE 8000
+ENV AUTHOR="alfabuster"
+USER appuser
+ENTRYPOINT [ "python3" , "server.py"]

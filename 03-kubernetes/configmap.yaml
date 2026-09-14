@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: cloud-configmap
+  namespace: cloud
+data:
+  AUTHOR: alfabuster

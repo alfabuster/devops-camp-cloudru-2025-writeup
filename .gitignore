@@ -1,0 +1,5 @@
+.vagrant/
+*.retry
+__pycache__/
+*.pyc
+.DS_Store
